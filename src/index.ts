@@ -13,23 +13,53 @@
 //
 // There are no worker threads and no cache on purpose: a template compiles in 1–2 ms, less than
 // a worker needs to start. See README.md for the numbers.
+import fg from 'fast-glob';
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'fs';
-import { createRequire } from 'module';
 import path from 'path';
-import { createCompiler } from './compiler.js';
+import pc from 'picocolors';
+import type { Logger, Plugin, ViteDevServer } from 'vite';
+import { createCompiler, type MjmlToHtmlMjmlOptions } from './compiler.js';
 
-const require = createRequire(import.meta.url);
-const { globSync } = require('fast-glob');
-const pc = require('picocolors');
+export type { MjmlToHtmlMjmlOptions } from './compiler.js';
+
+export interface MjmlToHtmlOptions {
+  /**
+   * Templates to compile, grouped by output subfolder: `{ [subfolder]: glob | glob[] }` (fast-glob
+   * patterns). Every matched file becomes `<dest>/<subfolder>/<basename>.html`.
+   */
+  input: Record<string, string | string[]>;
+  /** Output directory. */
+  dest: string;
+  mjmlOptions?: MjmlToHtmlMjmlOptions;
+}
+
+type PluginLogger = Pick<Logger, 'info' | 'warn' | 'error'>;
+
+interface Template {
+  filePath: string;
+  htmlPath: string;
+}
+
+interface CompiledTemplate {
+  htmlPath: string;
+  html: string;
+}
+
+interface BuildJob {
+  failed: boolean;
+  promise: Promise<CompiledTemplate[]>;
+}
 
 // Used until `configResolved` provides Vite's logger, e.g. when the hooks are called directly.
-const consoleLogger = {
+const consoleLogger: PluginLogger = {
   info: (message) => console.log(message),
   warn: (message) => console.warn(message),
   error: (message) => console.error(message),
 };
 
-export default function mjmlToHtmlPlugin({ input, dest, mjmlOptions = {} } = {}) {
+export default function mjmlToHtmlPlugin(options: MjmlToHtmlOptions): Plugin {
+  // Checked at runtime too: JavaScript configs get no type checking.
+  const { input, dest, mjmlOptions = {} } = options ?? ({} as Partial<MjmlToHtmlOptions>);
   if (!input || typeof input !== 'object') {
     throw new Error(`mjml-to-html: "input" must be an object, got ${typeof input}`);
   }
@@ -42,14 +72,14 @@ export default function mjmlToHtmlPlugin({ input, dest, mjmlOptions = {} } = {})
 
   const destRoot = path.resolve(dest);
   const compiler = createCompiler({ mjmlOptions });
-  const writtenFiles = [];
+  const writtenFiles: string[] = [];
   // html paths written by two templates, already reported: warn once, not on every dev recompile.
-  const reportedCollisions = new Set();
+  const reportedCollisions = new Set<string>();
   let isBuild = false;
   let logger = consoleLogger;
-  let buildJob = null;
+  let buildJob: BuildJob | null = null;
 
-  const formatSize = (bytes) => {
+  const formatSize = (bytes: number) => {
     const kb = bytes / 1024;
     if (kb >= 1024) {
       return `${(kb / 1024).toFixed(2)} MB`;
@@ -60,13 +90,13 @@ export default function mjmlToHtmlPlugin({ input, dest, mjmlOptions = {} } = {})
     return `${bytes} B`;
   };
 
-  const colorBySize = (str, bytes) => {
+  const colorBySize = (str: string, bytes: number) => {
     if (bytes < 10240) return pc.green(str);
     if (bytes < 102400) return pc.yellow(str);
     return pc.red(str);
   };
 
-  const logBuildOutput = (duration) => {
+  const logBuildOutput = (duration: number) => {
     if (writtenFiles.length === 0) return;
 
     const maxLen = Math.max(...writtenFiles.map((f) => path.basename(f).length));
@@ -86,12 +116,12 @@ export default function mjmlToHtmlPlugin({ input, dest, mjmlOptions = {} } = {})
     logger.info(`  ${pc.dim(`${writtenFiles.length} files, ${(duration / 1000).toFixed(2)}s`)}`);
   };
 
-  const collectTemplates = () => {
-    const templates = [];
-    const owners = new Map();
+  const collectTemplates = (): Template[] => {
+    const templates: Template[] = [];
+    const owners = new Map<string, string>();
 
     Object.entries(input).forEach(([subfolder, patterns]) => {
-      globSync(patterns).forEach((filePath) => {
+      fg.globSync(patterns).forEach((filePath) => {
         const htmlPath = path.resolve(destRoot, subfolder, `${path.basename(filePath, '.mjml')}.html`);
         if (!htmlPath.startsWith(destRoot + path.sep)) {
           throw new Error(`mjml-to-html: output of ${filePath} is outside "dest": ${htmlPath}`);
@@ -109,8 +139,8 @@ export default function mjmlToHtmlPlugin({ input, dest, mjmlOptions = {} } = {})
     return templates;
   };
 
-  const compile = async () => {
-    const results = [];
+  const compile = async (): Promise<CompiledTemplate[]> => {
+    const results: CompiledTemplate[] = [];
 
     for (const { filePath, htmlPath } of collectTemplates()) {
       const { html, warnings } = await compiler.render(filePath);
@@ -121,7 +151,7 @@ export default function mjmlToHtmlPlugin({ input, dest, mjmlOptions = {} } = {})
     return results;
   };
 
-  const write = (results) => {
+  const write = (results: CompiledTemplate[]) => {
     writtenFiles.length = 0;
 
     results.forEach(({ htmlPath, html }) => {
@@ -135,22 +165,23 @@ export default function mjmlToHtmlPlugin({ input, dest, mjmlOptions = {} } = {})
 
   // Build: start compiling on the next turn of the event loop, so `buildStart` returns at once.
   // Loading mjml and compiling then overlap with the bundler instead of running after it.
-  const startBuildJob = () => {
-    const nextTurn = new Promise((resolve) => {
+  const startBuildJob = (): BuildJob => {
+    const nextTurn = new Promise<void>((resolve) => {
       setImmediate(resolve);
     });
-    const job = { failed: false, promise: nextTurn.then(compile) };
+    const job: BuildJob = { failed: false, promise: nextTurn.then(compile) };
     // The rejection is reported from `closeBundle`; do not let it become an unhandled rejection.
     job.promise.catch(() => {});
     return job;
   };
 
-  const refreshOnMjmlChange = async (server, file) => {
+  const refreshOnMjmlChange = async (server: ViteDevServer, file: string) => {
     if (!file.endsWith('.mjml')) return;
     try {
       await compileAll();
       server.ws.send({ type: 'full-reload' });
-    } catch (error) {
+    } catch (caught) {
+      const error = caught instanceof Error ? caught : new Error(String(caught));
       // A broken template must not take the dev server down: report it and wait for the fix.
       server.config.logger.error(pc.red(error.message), { error });
       server.ws.send({ type: 'error', err: { message: error.message, stack: error.stack ?? '' } });

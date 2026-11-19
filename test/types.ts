@@ -1,4 +1,4 @@
-// Type-checked by `npm run typecheck`; never executed.
+// Type-checked against the built package by `pnpm typecheck`; never executed.
 import type { Plugin, UserConfig } from 'vite';
 import mjmlToHtmlPlugin from 'vite-plugin-mjml-to-html';
 

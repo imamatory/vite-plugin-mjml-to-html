@@ -147,8 +147,8 @@ What is slow is loading mjml, so that is what the plugin moves out of the way:
 ## Development
 
 ```sh
-npm install
-npm run check   # types, tests, package contents
+pnpm install
+pnpm check   # build, types, tests, package contents
 ```
 
 ## License

@@ -8,5 +8,5 @@
     "skipLibCheck": false,
     "types": ["node"]
   },
-  "include": ["index.d.ts", "test/types.ts"]
+  "include": ["src", "test"]
 }

@@ -22,24 +22,25 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "default": "./src/index.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
-  "types": "./index.d.ts",
+  "types": "./dist/index.d.ts",
   "files": [
-    "src",
-    "index.d.ts"
+    "dist"
   ],
   "sideEffects": false,
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
-    "check": "npm run typecheck && npm test && npm pack --dry-run"
+    "test": "node --import tsx --test test/*.test.ts",
+    "check": "pnpm build && pnpm typecheck && pnpm test && pnpm pack --dry-run",
+    "prepack": "pnpm build"
   },
   "dependencies": {
     "fast-glob": "^3.3.3",
@@ -52,7 +53,9 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "mjml": "^5.4.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.0",
     "vite": "^8.3.8"
-  }
+  },
+  "packageManager": "pnpm@12.14.0"
 }

@@ -1,33 +1,57 @@
-// Run: npm test
+// Run: pnpm test
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, test } from 'node:test';
-import mjmlToHtmlPlugin from '../src/index.js';
+import mjmlToHtmlPlugin, { type MjmlToHtmlOptions } from '../src/index.js';
 
-const mjml = createRequire(import.meta.url)('mjml');
+type Mjml = (source: string, options: object) => Promise<{ html: string }>;
+const mjml = createRequire(import.meta.url)('mjml') as Mjml;
 
-let root;
-let src;
-let dest;
-let logs;
+interface Message {
+  type: string;
+  err?: { message: string };
+}
+
+interface FakeServer {
+  watcher: {
+    add: (glob: string) => void;
+    on: (event: string, handler: (file: string) => Promise<void>) => void;
+  };
+  ws: { send: (message: Message) => void };
+  config: { logger: typeof logger };
+}
+
+// The hooks as the tests call them: directly, with only the parts of Vite the plugin reads.
+interface PluginHooks {
+  configResolved(config: { command: string; logger: typeof logger }): void;
+  buildStart(): void;
+  buildEnd(error?: Error): void;
+  closeBundle(): Promise<void>;
+  configureServer(server: FakeServer): Promise<void>;
+}
+
+let root: string;
+let src: string;
+let dest: string;
+let logs: { info: string[]; warn: string[]; error: string[] };
 
 const logger = {
-  info: (message) => logs.info.push(message),
-  warn: (message) => logs.warn.push(message),
-  error: (message) => logs.error.push(message),
+  info: (message: string) => logs.info.push(message),
+  warn: (message: string) => logs.warn.push(message),
+  error: (message: string) => logs.error.push(message),
 };
 
-const write = (name, content) => {
+const write = (name: string, content: string) => {
   const file = path.join(src, name);
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, content);
   return file;
 };
 
-const template = (body) => `<mjml><mj-body><mj-section><mj-column>${body}</mj-column></mj-section></mj-body></mjml>\n`;
+const template = (body: string) => `<mjml><mj-body><mj-section><mj-column>${body}</mj-column></mj-section></mj-body></mjml>\n`;
 
 const writeTemplates = () => {
   write('partials/footer.mjml', '<mj-text>footer</mj-text>\n');
@@ -35,18 +59,18 @@ const writeTemplates = () => {
   write('mails/reset.mjml', template('<mj-button href="https://example.com">Reset</mj-button>'));
 };
 
-const createPlugin = (options = {}, command = 'build') => {
+const createPlugin = (options: Partial<MjmlToHtmlOptions> = {}, command = 'build') => {
   const plugin = mjmlToHtmlPlugin({
     input: { mails: path.join(src, 'mails/*.mjml') },
     dest,
     ...options,
-  });
+  }) as unknown as PluginHooks;
   plugin.configResolved({ command, logger });
   return plugin;
 };
 
 // The hooks in the order Vite calls them; `vite:prepare-out-dir` empties `dest` in between.
-const runBuild = async (plugin) => {
+const runBuild = async (plugin: PluginHooks) => {
   plugin.buildStart();
   rmSync(dest, { recursive: true, force: true });
   plugin.buildEnd();
@@ -54,10 +78,10 @@ const runBuild = async (plugin) => {
 };
 
 const createServer = () => {
-  const handlers = {};
-  const sent = [];
-  const watched = [];
-  const server = {
+  const handlers: Record<string, (file: string) => Promise<void>> = {};
+  const sent: Message[] = [];
+  const watched: string[] = [];
+  const server: FakeServer = {
     watcher: {
       add: (glob) => watched.push(glob),
       on: (event, handler) => Object.assign(handlers, { [event]: handler }),
@@ -120,7 +144,7 @@ test('validation problems are warnings with the soft level', async () => {
 test('validation problems fail the build with the strict level and name the template', async () => {
   const file = write('mails/invalid.mjml', template('<mj-text foo="bar">x</mj-text>'));
 
-  await assert.rejects(runBuild(createPlugin({ mjmlOptions: { validationLevel: 'strict' } })), (error) => {
+  await assert.rejects(runBuild(createPlugin({ mjmlOptions: { validationLevel: 'strict' } })), (error: Error) => {
     assert.match(error.message, /mjml-to-html: failed to compile/);
     assert.ok(error.message.includes(file));
     return true;
@@ -140,8 +164,11 @@ test('a failed bundle writes nothing and does not report the mjml error', async 
 });
 
 test('rejects invalid options', () => {
+  // @ts-expect-error `input` is missing
   assert.throws(() => mjmlToHtmlPlugin({ dest: '/tmp/x' }), /"input"/);
+  // @ts-expect-error `dest` is missing
   assert.throws(() => mjmlToHtmlPlugin({ input: {} }), /"dest"/);
+  // @ts-expect-error `mjmlOptions` is null
   assert.throws(() => mjmlToHtmlPlugin({ input: {}, dest: '/tmp/x', mjmlOptions: null }), /"mjmlOptions"/);
 });
 
@@ -192,6 +219,6 @@ test('dev compiles on start, recompiles on change and reports a broken template'
   write('mails/welcome.mjml', template('<mj-text foo="bar">x</mj-text>'));
   await strictServer.handlers.change(source);
   assert.equal(strictServer.sent[0].type, 'error');
-  assert.ok(strictServer.sent[0].err.message.includes(source));
+  assert.ok(strictServer.sent[0].err?.message.includes(source));
   assert.equal(logs.error.length, 1);
 });
