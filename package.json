@@ -3,23 +3,28 @@
   "version": "0.1.0",
   "description": "Vite plugin that compiles MJML email templates to static HTML files next to the bundle",
   "keywords": [
-    "vite",
-    "vite-plugin",
-    "mjml",
-    "html",
     "email",
+    "html",
+    "mjml",
+    "newsletter",
     "templates",
-    "newsletter"
+    "vite",
+    "vite-plugin"
   ],
-  "license": "MIT",
-  "author": "Vadim Safonov",
   "homepage": "https://github.com/imamatory/vite-plugin-mjml-to-html#readme",
   "bugs": "https://github.com/imamatory/vite-plugin-mjml-to-html/issues",
+  "license": "MIT",
+  "author": "Vadim Safonov",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/imamatory/vite-plugin-mjml-to-html.git"
   },
+  "files": [
+    "dist"
+  ],
   "type": "module",
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -27,35 +32,43 @@
     },
     "./package.json": "./package.json"
   },
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
-  "sideEffects": false,
-  "engines": {
-    "node": "^20.19.0 || >=22.12.0"
-  },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
     "typecheck": "tsc -p tsconfig.json",
     "test": "node --import tsx --test test/*.test.ts",
-    "check": "pnpm build && pnpm typecheck && pnpm test && pnpm pack --dry-run",
-    "prepack": "pnpm build"
+    "lint": "oxlint --deny-warnings",
+    "format": "oxfmt --check",
+    "knip": "knip",
+    "check": "pnpm run build && pnpm run typecheck && pnpm run lint && pnpm run format && pnpm run knip && pnpm test && pnpm pack --dry-run",
+    "fix": "oxlint --fix && oxfmt",
+    "commitlint": "commitlint --from origin/main --to HEAD",
+    "release": "commit-and-tag-version"
   },
   "dependencies": {
     "fast-glob": "^3.3.3",
     "picocolors": "^1.1.1"
   },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "@types/node": "^22.20.5",
+    "commit-and-tag-version": "^13.3.0",
+    "knip": "^6.45.1",
+    "mjml": "^5.4.1",
+    "mjml4": "npm:mjml@^4.18.0",
+    "oxfmt": "^0.79.0",
+    "oxlint": "^1.94.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  },
   "peerDependencies": {
     "mjml": "^4.18.0 || ^5.0.0",
     "vite": ">=5.0.0"
   },
-  "devDependencies": {
-    "@types/node": "^22.0.0",
-    "mjml": "^5.4.1",
-    "tsx": "^4.23.15",
-    "typescript": "^5.9.0",
-    "vite": "^8.3.8"
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   },
-  "packageManager": "pnpm@12.14.0"
+  "packageManager": "pnpm@12.21.0"
 }
