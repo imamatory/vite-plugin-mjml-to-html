@@ -40,11 +40,11 @@ through `mj-include` must not match the globs.
 
 ## Options
 
-| Option        | Type                              | Default  | Description                                                            |
-| ------------- | --------------------------------- | -------- | ---------------------------------------------------------------------- |
-| `input`       | `{ [subfolder]: glob \| glob[] }` | required | Templates to compile, grouped by output subfolder (fast-glob)          |
-| `dest`        | `string`                          | required | Output directory                                                       |
-| `mjmlOptions` | `object`                          | `{}`     | Passed to mjml as is: `keepComments`, `validationLevel`, `fonts`, …    |
+| Option        | Type                              | Default  | Description                                                         |
+| ------------- | --------------------------------- | -------- | ------------------------------------------------------------------- |
+| `input`       | `{ [subfolder]: glob \| glob[] }` | required | Templates to compile, grouped by output subfolder (fast-glob)       |
+| `dest`        | `string`                          | required | Output directory                                                    |
+| `mjmlOptions` | `object`                          | `{}`     | Passed to mjml as is: `keepComments`, `validationLevel`, `fonts`, … |
 
 Invalid options throw when the plugin is created, not during the build.
 
@@ -125,12 +125,12 @@ a cache would cost about as much as compiling.
 
 What is slow is loading mjml, so that is what the plugin moves out of the way:
 
-| What                          | Eager load | This plugin |
-| ----------------------------- | ---------- | ----------- |
-| Import of the plugin module   | 135 ms     | 13 ms       |
-| `buildStart`                  | 16 ms      | <1 ms       |
-| `closeBundle`                 | 20 ms      | 3 ms        |
-| Total on top of the bundle    | 170 ms     | 18 ms       |
+| What                        | Eager load | This plugin |
+| --------------------------- | ---------- | ----------- |
+| Import of the plugin module | 135 ms     | 13 ms       |
+| `buildStart`                | 16 ms      | <1 ms       |
+| `closeBundle`               | 20 ms      | 3 ms        |
+| Total on top of the bundle  | 170 ms     | 18 ms       |
 
 ## Safety
 
@@ -146,10 +146,37 @@ What is slow is loading mjml, so that is what the plugin moves out of the way:
 
 ## Development
 
+The source is TypeScript in `src/`; the package ships the compiled JavaScript and declarations from `dist/`.
+
 ```sh
-pnpm install
-pnpm check   # build, types, tests, package contents
+mise install # pinned tools: node, hk and the linters
+mise run setup # pnpm install and the git hooks
+mise run check # every check, the same set CI runs
+pnpm run check # only the package part: build, types, lint, format, Knip, tests, package contents
 ```
+
+The tests use `node:test` and temporary fixture directories, and call the hooks in the order Vite does. They import
+the source through tsx, so `pnpm test` runs without a build.
+
+CI runs them against mjml 4 and 5. Both are locked: mjml 4 as the `mjml4` alias, which the mjml 4 job links in
+place of `node_modules/mjml`. To run that job locally:
+
+```sh
+ln -sfn "$(readlink node_modules/mjml4)" node_modules/mjml && MJML_MAJOR=4 pnpm test
+rm node_modules/mjml && pnpm install --frozen-lockfile # back to mjml 5
+```
+
+### Releasing
+
+Commits follow Conventional Commits, so the next version and the changelog come from them. On `main`, with a clean tree:
+
+```sh
+pnpm run release # bumps package.json, writes CHANGELOG.md, commits and tags vX.Y.Z
+git push --follow-tags origin main
+```
+
+The tag starts the Publish workflow: it runs the checks, publishes to npm and creates the GitHub release from the
+matching `CHANGELOG.md` section. Use `pnpm run release -- --release-as minor` to override the computed bump.
 
 ## License
 
