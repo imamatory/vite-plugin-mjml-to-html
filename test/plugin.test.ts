@@ -113,14 +113,7 @@ afterEach(() => {
 });
 
 // mjml 5 ignores `mj-include` by default, and includes outside the template folder need `includePath`.
-// mjml 4 includes by default and ignores `includePath`.
 const includeOptions = () => ({ ignoreIncludes: false, includePath: path.join(src, 'partials') });
-
-// CI points `mjml` at one major per matrix leg (see ci.yml): fail rather than test the other one.
-test('mjml is the major CI asks for', { skip: !process.env.MJML_MAJOR }, () => {
-  const { version } = createRequire(import.meta.url)('mjml/package.json') as { version: string };
-  assert.equal(version.split('.')[0], process.env.MJML_MAJOR);
-});
 
 test('build output equals mjml and resolves mj-include relative to the template', async () => {
   writeTemplates();

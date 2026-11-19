@@ -20,7 +20,6 @@ jobs:
       fail-fast: false
       matrix:
         node: [20, 22, 24]
-        mjml: [4, 5]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,13 +30,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # mjml 4 is locked too, as the `mjml4` alias: point `mjml` at it instead of installing it here.
-      - name: Use mjml ${{ matrix.mjml }}
-        if: matrix.mjml == 4
-        run: ln -sfn "$(readlink node_modules/mjml4)" node_modules/mjml
       - run: pnpm run check
-        env:
-          MJML_MAJOR: ${{ matrix.mjml }}
 
   # Every check of the repository through hk, the same set the git hooks run.
   quality:

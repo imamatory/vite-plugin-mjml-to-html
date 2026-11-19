@@ -29,7 +29,7 @@ local fast = new Mapping<String, Step> {
 local all = (fast) {
     ["package"] {
         // build, typecheck, lint, format, knip, tests and the package contents.
-        glob = List("src/**", "test/**", "package.json", "pnpm-lock.yaml", "tsconfig*.json", "knip.jsonc")
+        glob = List("src/**", "test/**", "package.json", "pnpm-lock.yaml", "tsconfig*.json", "knip.json")
         check = "pnpm run --silent check"
     }
     ["lychee"] {

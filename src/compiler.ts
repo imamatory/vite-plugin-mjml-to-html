@@ -21,12 +21,12 @@ export interface RenderResult {
   warnings: string[];
 }
 
-// The part of the mjml API the plugin uses. mjml 4 returns the result, mjml 5 returns a promise.
+// The part of the mjml API the plugin uses.
 interface MjmlResult {
   html: string;
   errors?: { formattedMessage: string }[];
 }
-type Mjml = (source: string, options: MjmlToHtmlMjmlOptions) => MjmlResult | Promise<MjmlResult>;
+type Mjml = (source: string, options: MjmlToHtmlMjmlOptions) => Promise<MjmlResult>;
 
 export function createCompiler({ mjmlOptions = {} }: { mjmlOptions?: MjmlToHtmlMjmlOptions } = {}) {
   let mjml: Mjml | undefined;

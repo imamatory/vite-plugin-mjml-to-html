@@ -1,5 +1,0 @@
-{
-  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
-  // mjml4 (npm:mjml@^4) is not imported: the mjml 4 leg of CI points node_modules/mjml at it (see ci.yml).
-  "ignoreDependencies": ["mjml4"],
-}
