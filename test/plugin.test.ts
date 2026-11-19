@@ -51,7 +51,8 @@ const write = (name: string, content: string) => {
   return file;
 };
 
-const template = (body: string) => `<mjml><mj-body><mj-section><mj-column>${body}</mj-column></mj-section></mj-body></mjml>\n`;
+const template = (body: string) =>
+  `<mjml><mj-body><mj-section><mj-column>${body}</mj-column></mj-section></mj-body></mjml>\n`;
 
 const writeTemplates = () => {
   write('partials/footer.mjml', '<mj-text>footer</mj-text>\n');
@@ -77,8 +78,16 @@ const runBuild = async (plugin: PluginHooks) => {
   await plugin.closeBundle();
 };
 
+type Handlers = Record<string, (file: string) => Promise<void>>;
+
+const handler = (handlers: Handlers, event: string) => {
+  const fn = handlers[event];
+  if (!fn) throw new Error(`no ${event} handler registered`);
+  return fn;
+};
+
 const createServer = () => {
-  const handlers: Record<string, (file: string) => Promise<void>> = {};
+  const handlers: Handlers = {};
   const sent: Message[] = [];
   const watched: string[] = [];
   const server: FakeServer = {
@@ -104,7 +113,6 @@ afterEach(() => {
 });
 
 // mjml 5 ignores `mj-include` by default, and includes outside the template folder need `includePath`.
-// mjml 4 includes by default and ignores `includePath`.
 const includeOptions = () => ({ ignoreIncludes: false, includePath: path.join(src, 'partials') });
 
 test('build output equals mjml and resolves mj-include relative to the template', async () => {
@@ -137,8 +145,9 @@ test('validation problems are warnings with the soft level', async () => {
   await runBuild(createPlugin());
 
   assert.ok(existsSync(path.join(dest, 'mails/invalid.html')));
+  const [warning = ''] = logs.warn;
   assert.equal(logs.warn.length, 1);
-  assert.ok(logs.warn[0].includes(file), logs.warn[0]);
+  assert.ok(warning.includes(file), warning);
 });
 
 test('validation problems fail the build with the strict level and name the template', async () => {
@@ -189,8 +198,9 @@ test('two templates that write the same html file are reported once', async () =
   await runBuild(plugin);
   await runBuild(plugin);
 
+  const [warning = ''] = logs.warn;
   assert.equal(logs.warn.length, 1);
-  assert.match(logs.warn[0], /both write .*reset\.html/);
+  assert.match(warning, /both write .*reset\.html/);
 });
 
 test('dev compiles on start, recompiles on change and reports a broken template', async () => {
@@ -204,11 +214,11 @@ test('dev compiles on start, recompiles on change and reports a broken template'
   assert.deepEqual(watched, [`${path.join(src, 'mails')}/**/*.mjml`]);
 
   // Files other than .mjml are ignored.
-  await handlers.change(path.join(src, 'notes.txt'));
+  await handler(handlers, 'change')(path.join(src, 'notes.txt'));
   assert.deepEqual(sent, []);
 
   const source = write('mails/welcome.mjml', template('<mj-text>Changed</mj-text>'));
-  await handlers.change(source);
+  await handler(handlers, 'change')(source);
   assert.match(readFileSync(welcome, 'utf8'), /Changed/);
   assert.deepEqual(sent, [{ type: 'full-reload' }]);
 
@@ -217,8 +227,9 @@ test('dev compiles on start, recompiles on change and reports a broken template'
   const strictServer = createServer();
   await strict.configureServer(strictServer.server);
   write('mails/welcome.mjml', template('<mj-text foo="bar">x</mj-text>'));
-  await strictServer.handlers.change(source);
-  assert.equal(strictServer.sent[0].type, 'error');
-  assert.ok(strictServer.sent[0].err?.message.includes(source));
+  await handler(strictServer.handlers, 'change')(source);
+  const [message] = strictServer.sent;
+  assert.equal(message?.type, 'error');
+  assert.ok(message.err?.message.includes(source));
   assert.equal(logs.error.length, 1);
 });

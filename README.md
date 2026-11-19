@@ -7,7 +7,6 @@ next to the bundle and consumed by something else, for example a backend that se
 - `mjml` is loaded on first use: commands that never compile (`vite preview`, config tooling) do not pay for it.
 - In dev every `.mjml` change recompiles the templates and reloads the browser. A broken template does not stop the
   dev server.
-- Works with mjml 4 and mjml 5.
 
 ## Install
 
@@ -15,7 +14,7 @@ next to the bundle and consumed by something else, for example a backend that se
 npm install --save-dev vite-plugin-mjml-to-html mjml
 ```
 
-Requires Node 20.19+ or 22.12+, Vite 5 or newer and mjml 4.18+ or 5.
+Requires Node 20.19+ or 22.12+, Vite 5 or newer and mjml 5.
 
 ## Usage
 
@@ -40,20 +39,20 @@ through `mj-include` must not match the globs.
 
 ## Options
 
-| Option        | Type                              | Default  | Description                                                            |
-| ------------- | --------------------------------- | -------- | ---------------------------------------------------------------------- |
-| `input`       | `{ [subfolder]: glob \| glob[] }` | required | Templates to compile, grouped by output subfolder (fast-glob)          |
-| `dest`        | `string`                          | required | Output directory                                                       |
-| `mjmlOptions` | `object`                          | `{}`     | Passed to mjml as is: `keepComments`, `validationLevel`, `fonts`, …    |
+| Option        | Type                              | Default  | Description                                                         |
+| ------------- | --------------------------------- | -------- | ------------------------------------------------------------------- |
+| `input`       | `{ [subfolder]: glob \| glob[] }` | required | Templates to compile, grouped by output subfolder (fast-glob)       |
+| `dest`        | `string`                          | required | Output directory                                                    |
+| `mjmlOptions` | `object`                          | `{}`     | Passed to mjml as is: `keepComments`, `validationLevel`, `fonts`, … |
 
 Invalid options throw when the plugin is created, not during the build.
 
 The plugin sets one mjml option itself: `filePath`, the path of the template. It makes `mj-include` paths resolve
 relative to the template instead of the working directory. `mjmlOptions.filePath` overrides it.
 
-## `mj-include` in mjml 5
+## `mj-include`
 
-mjml 5 changed the defaults, and an include that is not allowed is dropped **without an error or a warning**:
+mjml 5 changed the include defaults, and an include that is not allowed is dropped **without an error or a warning**:
 
 - `ignoreIncludes` is `true` by default: every `mj-include` is ignored.
 - With `ignoreIncludes: false`, only files under the template's own directory are included. Files elsewhere (for
@@ -66,8 +65,6 @@ mjmlToHtml({
   mjmlOptions: { ignoreIncludes: false, includePath: [path.resolve('src/partials')] },
 });
 ```
-
-mjml 4 includes by default and ignores `includePath`, so the same options work with both versions.
 
 ## Build
 
@@ -112,12 +109,12 @@ Use `validationLevel: 'strict'` in CI if a broken email must not be shipped.
 ## Design: no workers, no cache
 
 A template compiles in 1–2 ms, so the plugin uses neither worker threads nor a cache. Measured with 6 templates,
-mjml 4.18, Node 22, Apple Silicon:
+mjml 5.4, Node 26, Apple Silicon:
 
 | What                       | Time       |
 | -------------------------- | ---------- |
-| Loading the `mjml` package | 130–270 ms |
-| Compiling all 6 templates  | 8 ms       |
+| Loading the `mjml` package | 130–300 ms |
+| Compiling all 6 templates  | 3–5 ms     |
 | Starting one worker thread | ~100 ms    |
 
 A worker would have to load mjml again and costs more than it saves until there are hundreds of templates. Checking
@@ -125,12 +122,12 @@ a cache would cost about as much as compiling.
 
 What is slow is loading mjml, so that is what the plugin moves out of the way:
 
-| What                          | Eager load | This plugin |
-| ----------------------------- | ---------- | ----------- |
-| Import of the plugin module   | 135 ms     | 13 ms       |
-| `buildStart`                  | 16 ms      | <1 ms       |
-| `closeBundle`                 | 20 ms      | 3 ms        |
-| Total on top of the bundle    | 170 ms     | 18 ms       |
+| What                        | Eager load | This plugin |
+| --------------------------- | ---------- | ----------- |
+| Import of the plugin module | 135 ms     | 13 ms       |
+| `buildStart`                | 16 ms      | <1 ms       |
+| `closeBundle`               | 20 ms      | 3 ms        |
+| Total on top of the bundle  | 170 ms     | 18 ms       |
 
 ## Safety
 
@@ -146,10 +143,29 @@ What is slow is loading mjml, so that is what the plugin moves out of the way:
 
 ## Development
 
+The source is TypeScript in `src/`; the package ships the compiled JavaScript and declarations from `dist/`.
+
 ```sh
-pnpm install
-pnpm check   # build, types, tests, package contents
+mise install # pinned tools: node, hk and the linters
+mise run setup # pnpm install and the git hooks
+mise run check # every check, the same set CI runs
+pnpm run check # only the package part: build, types, lint, format, Knip, tests, package contents
 ```
+
+The tests use `node:test` and temporary fixture directories, and call the hooks in the order Vite does. They import
+the source through tsx, so `pnpm test` runs without a build.
+
+### Releasing
+
+Commits follow Conventional Commits, so the next version and the changelog come from them. On `main`, with a clean tree:
+
+```sh
+pnpm run release # bumps package.json, writes CHANGELOG.md, commits and tags vX.Y.Z
+git push --follow-tags origin main
+```
+
+The tag starts the Publish workflow: it runs the checks, publishes to npm and creates the GitHub release from the
+matching `CHANGELOG.md` section. Use `pnpm run release -- --release-as minor` to override the computed bump.
 
 ## License
 
