@@ -1,5 +1,7 @@
 # vite-plugin-mjml-to-html
 
+[![npm version](https://img.shields.io/npm/v/vite-plugin-mjml-to-html)](https://www.npmjs.com/package/vite-plugin-mjml-to-html)
+
 A Vite plugin that compiles [MJML](https://mjml.io) email templates into static html files. The files are written
 next to the bundle and consumed by something else, for example a backend that sends them as emails.
 
